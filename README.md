@@ -15,11 +15,11 @@ Rail-dbGaP secures an EMR cluster so it is compliant with NIH guidelines as foll
 
 2. **Inbound traffic to the cluster is restricted via security groups.** A security group is essentially a stateful firewall. A master security group for the master instance and a worker security group for worker instances prevent initiation of any connection to the cluster except by essential web services. These web services correspond to particular IPs and ports, and the most restrictive sets for master and worker instances are configured automatically. SSH access to the cluster is also restricted: the only interaction between user and cluster is via the EMR interface, which presents progress information through the essential web services. Security groups are also set up by creating a stack with the [CloudFormation](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) template [`cloudformation/dbgap.template`](cloudformation/dbgap.template). Master and worker instances must be associated with security groups when creating the EMR cluster.
 
-3. **Data are encrypted at rest.** During cluster setup, before any sensitive data has reached the cluster, each instance runs the preliminary script (i.e., bootstrap action) [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh) that uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a keyfile. The key is randomly generated on each instance and never exposed to the user. Temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links. (See line 128 of [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh).) Files written to cloud storage are also encrypted; Amazon S3 uses [AES256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard). This is enforced by the creation of a bucket with a policy barring uploads that do not turn on server-side encryption in the dbGaP template [`cloudformation/dbgap.template`](cloudformation/dbgap.template).
+3. **Data are encrypted at rest.** During cluster setup, before any sensitive data has reached the cluster, each instance runs the preliminary script (i.e., bootstrap action) [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh) that uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a keyfile. The key is randomly generated on each instance and never exposed to the user. Temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links. (See line 128 of [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh).) Files written to cloud storage are also encrypted; Amazon S3 uses [AES256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard). This is enforced by the creation of a bucket with a policy barring uploads that do not turn on server-side encryption in the dbGaP template [`cloudformation/dbgap.template`](cloudformation/dbgap.template) and by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
 
-4. **Data are encrypted in transit.** Worker instances download dbGaP data using [SRA Tools](http://ncbi.github.io/sra-tools/), ensuring encryption of data transferred from dbGaP to the cluster. Secure Sockets Layer (SSL) is enabled for transfers between cloud storage and the cluster as well as between cloud storage service and compliant local storage to which an investigator saves results. This is achieved by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
+4. **Data are encrypted in transit.** Worker instances download dbGaP data using [SRA Tools](http://ncbi.github.io/sra-tools/), ensuring encryption of data transferred from dbGaP to the cluster. AWS enables [Secure Sockets Layer (SSL)](https://www.digicert.com/ssl.htm) by default for transfers between cloud storage and the cluster as well as between cloud storage service and compliant local storage to which an investigator saves results.
 
-5. **Identities are managed to enforce the principle of least privilege.** The principle of least privilege prescribes users have only the privileges required to perform necessary tasks. In the Rail-dbGaP protocol, an administrator grants the user only those privileges required to run Hadoop programs on EMR clusters. The administrator uses multi-factor authentication and constrains the user to set up a password satisfying NIH's requirements listed among [security best practices](http://www.ncbi.nlm.nih.gov/projects/gap/pdf/dbgap_2b_security_procedures.pdf) (minimum of 12 characters, no complete dictionary words, etc.) On AWS, an account administrator configures an Identity and Access Management (IAM) user expressly for running Hadoop jobs and retrieving results from S3, and the password rules described above are enforced. This is achieved as described below in [AWS account setup]().
+5. **Identities are managed to enforce the principle of least privilege.** The principle of least privilege prescribes users have only the privileges required to perform necessary tasks. In the Rail-dbGaP protocol, an administrator grants the user only those privileges required to run Hadoop programs on EMR clusters. The administrator uses multi-factor authentication and constrains the user to set up a password satisfying NIH's requirements listed among [security best practices](http://www.ncbi.nlm.nih.gov/projects/gap/pdf/dbgap_2b_security_procedures.pdf) (minimum of 12 characters, no complete dictionary words, etc.) On AWS, an account administrator configures an Identity and Access Management (IAM) user expressly for running Hadoop jobs and retrieving results from S3, and the password rules described above are enforced. This is achieved as described below in [Setting up Amazon Web Services](README.me#setup).
 
 6. **Audit logs are enabled.** These record logins and actions taken by the user and on the user's behalf, including API calls made by processes running on the cluster. On AWS, audit logs take the form of CloudTrail logs stored in encrypted S3 buckets. They are enabled when a stack is created with the dbGaP template [`cloudformation/dbgap.template`](cloudformation/dbgap.template).
 
@@ -160,13 +160,61 @@ This section reviews the implementation of an EMR pipeline that ingests dbGaP-pr
 
 Assume the secure bucket created during [AWS setup](README.md#setup) is at `s3://rail-dbgap-secure`. The following is performed on the user's computer, where the AWS CLI was installed.
 
-1. Download [the dbGaP repository key](ftp://ftp.ncbi.nlm.nih.gov/sra/examples/decrypt_examples/prj_phs710EA_test.ngc) for the test data. Now upload the key to S3 securely with the AWS CLI by entering
+1. Download [the dbGaP repository key](ftp://ftp.ncbi.nlm.nih.gov/sra/examples/decrypt_examples/prj_phs710EA_test.ngc) for the test data. Upload the key to S3 securely with the AWS CLI by entering
 
-        aws s3 cp /path/to/prj_phs710EA_test.ngc s3://rail-dbgap-secure/test/prj_phs710EA_test.ngc
-You may choose to delete the key from your computer with
+        aws s3 cp /path/to/prj_phs710EA_test.ngc s3://rail-dbgap-secure/test/prj_phs710EA_test.ngc --profile dbgap
+It is recommended that you delete the key from your computer with
 
         rm /path/to/prj_phs710EA_test.ngc
-2. Sign into AWS 
+2. Using a text editor, create a script `copy_key_to_node.sh` with the following contents.
+
+        #!/usr/bin/env bash
+        aws s3 cp s3://rail-dbgap-secure/test/prj_phs710EA_test.ngc /mnt/space/DBGAP.ngc
+Copy the script to S3 as follows.
+
+        aws s3 cp /path/to/copy_key_to_node.sh s3://rail-dbgap-secure/test/
+This script will be a bootstrap action that securely transfers the key to each EC2 instance.
+3. Download [this list] of three SRA run accession numbers from test dbGaP project [SRP041052](http://trace.ncbi.nlm.nih.gov/Traces/sra/?study=SRP041052). Copy it to S3:
+
+-inputformat org.apache.hadoop.mapred.lib.NLineInputFormat
+3. Navigate to the login page URL from *credentials (2).csv*. The AWS console should appear immediately or after you log in with the credentials from this CSV.
+4. Click **EMR**, then **Create cluster**, and finally **Go to advanced options**.
+5. Under **Software Configuration**, ensure the Vendor Amazon is selected, and deselect all items except Hadoop.
+6. Under **Edit software settings (optional)**, click **Load JSON from S3**, and enter the URL
+
+        s3://rail-emr/hadoop_configuration.json
+This sets the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true` to ensure encryption of data in transit. The JSON file may also be viewed [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/hadoop_configuration.json).
+7. Under **Add steps (optional), select **Streaming program** next to **Step type**, and click **Configure**.
+7. Next to **Name**, type `Count k-mers`.
+8. Next to **Mapper**, enter
+
+    read SRR;
+    KMERSIZE=21;
+    cd /mnt/space/secure;
+    fastq-dump ${SRR} --stdout -X 10000
+      | bioawk -v kmersize=${KMERSIZE} -v srr=${SRR} -c fastx
+        '{ 
+            for (i=1; i<=length($seq)-kmersize; i++) {
+                subseq=substr($seq, i, kmersize);
+                revcompsubseq=revcomp(subseq);
+                if (subseq > revcompsubseq) {
+                    print "UniqValueCount:" revcompsubseq "\t" srr;
+                } else {
+                    print "UniqValueCount:" subseq "\t" srr;
+                }
+            }
+        }'
+on one line. This describes a mapper that uses [SRA Tools](https://github.com/ncbi/sra-tools) `fastq-dump` to grab an input sample from SRA and Heng Li's [bioawk]()https://github.com/lh3/bioawk to extract k-mers (for k=21) from its read sequences to print either the k-mer or its reverse complement, whichever is first in lexicographic order. `UniqValueCount` refers to how aggregation should be performed by Hadoop Streaming: the reducer described in the next step will count the number of unique run accession numbers associated with a given k-mer. The command-line parameter `-X 10000` of `fastq-dump` grabs only the first 10,000 reads of each sample for the purpose of demonstration only.
+9. Next to **Reducer**, enter
+
+        aggregate
+This allows the `UniqValueCount`s output by the mappers to be interpreted properly. See [this page](https://hadoop.apache.org/docs/r1.2.1/streaming.html#Hadoop+Aggregate+Package) for more information on the Hadoop Aggregate package.
+7. Click **Next**. Under **Hardware Configuration**, click the **Network** drop-down menu, and select the VPC that does not have **(default)** next to it. This is the VPC that was created as part of the secure CloudFormation stack during AWS setup.
+8. Select 1 `m3.xlarge` for the master EC2 instance group, and 1 `m3.xlarge` for the core EC2 instance group.
+9. Click **Next**. Under **Logging**, enter the S3 folder `s3://rail-dbgap-secure/logs/` to ensure that logs end up in the secure bucket created as part of the CloudFormation stack during AWS setup.
+10. Under dsaaa
+
+<div align="center"><img src="assets/oldnewpass.png" alt="Change password" style="width:400px; padding: 5px"/></div>
 2. Run
 
         rail-rna go elastic
