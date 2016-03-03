@@ -188,11 +188,14 @@ This script will be a bootstrap action that a) securely transfers the key to eac
 3. Download [this list](https://raw.githubusercontent.com/nellore/rail-dbgap/master/manifest.txt) of three SRA run accession numbers from test dbGaP project [SRP041052](http://trace.ncbi.nlm.nih.gov/Traces/sra/?study=SRP041052). Copy it to S3 as follows
 
         aws s3 cp /path/to/manifest.txt s3://rail-dbgap-secure/test/ --profile dbgap --sse
-
 3. Navigate to the login page URL from *credentials (2).csv*. The AWS console should appear immediately or after you log in with the credentials from this CSV.
 4. Click **EMR**, then **Create cluster**, and finally **Go to advanced options**.
+<div align="center"><img src="assets/emrconsole.png" alt="Select EMR" style="width: 600px; padding: 5px"/></div>
+<div align="center"><img src="assets/createcluster.png" alt="Create cluster" style="padding: 5px"/></div>
+<div align="center"><img src="assets/advancedoptions.png" alt="Advanced options" style="width: 600px; padding: 5px"/></div>
 5. Under **Software Configuration**, ensure the Vendor Amazon is selected, and select 3.11.0 under Release. Deselect all software except Hadoop 2.4.0.
 6. Under **Add steps (optional)**, select **Streaming program** next to **Step type**, and click **Configure**.
+<div align="center"><img src="assets/streamingoptions.png" alt="Streaming program" style="width: 600px; padding: 5px"/></div>
 7. Next to **Name**, type "Count number of samples in which each k-mer appears".
 8. Next to **Mapper**, enter
 
@@ -236,18 +239,27 @@ This is where the number of samples in which each k-mer appears will be written.
 
         -inputformat org.apache.hadoop.mapred.lib.NLineInputFormat
 to tell Hadoop that each mapper should be passed a single line of the input file `manifest.txt`. The box in which you're entering data should now look as depicted below.
-13. Click **Add**. The **Software Configuration** step is now finished and should look as follows. 
-
+<div align="center"><img src="assets/addstep.png" alt="Add step" style="width: 600px; padding: 5px"/></div>
+13. Click **Add**. The **Software Configuration** step is now finished and should look as follows.
+<div align="center"><img src="assets/softwareconfiguration.png" alt="Software configuration" style="width: 600px; padding: 5px"/></div>
 Now click **Next**. Under **Hardware Configuration**, click the **Network** drop-down menu, and select the VPC that does not have **(default)** next to it. This is the VPC that was created as part of the secure CloudFormation stack during AWS setup.
 14. Select 1 `m3.xlarge` for the master EC2 instance group, and 1 `m3.xlarge` for the core EC2 instance group.
 15. Click **Next**. Under **Logging**, enter the S3 folder `s3://rail-dbgap-secure/logs/` to ensure that logs end up in the secure bucket created as part of the CloudFormation stack during AWS setup. Keep **Debugging** selected, but deselect **Termination protection**; turning this option on would simply prevent termination of the EMR cluster from the API or the command line.
+<div align="center"><img src="assets/putlogshere.png" alt="Hardware configuration" style="width: 600px; padding: 5px"/></div>
 16. Next to **Bootstrap Actions**, select **Custom action** from the drop-down menu, and click **Configure and add**, Enter the **Name** "Encrypt local storage", and specify the **JAR location** `s3://rail-emr/encrypt_local_storage.sh`, which is exactly the script [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh). As described in the [Rail-dbGaP protocol specification](README.md#spec), this script uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a randomly generated keyfile, where temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links.
-17. In exactly the same way, configure bootstrap actions to obtain the first four bootstrap actions depicted below. (Note that these four bootstrap actions should be in the order shown there.) `install_bioawk.sh` just installs bioawk, and `copy_files_to_node.sh` is the script you created in a previous step that securely copies the dbGaP key and step script on S3 to each node of the EMR cluster. [`set_up_sra_tools.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/set_up_sra_tools.sh) downloads and installs SRA Tools, which includes `fastq-dump`. The script also configures a workspace on the encrypted partition using the dbGaP key so that `fastq-dump` can download samples from the dbGaP project protected by the key.
+<div align="center"><img src="assets/encryptlocalstorage.png" alt="Encrypt local storage bootstrap" style="width: 600px; padding: 5px"/></div>
+17. In exactly the same way, configure bootstrap actions to obtain the first four bootstrap actions depicted below. (Note that these four bootstrap actions should be in the order shown there.)
+<div align="center"><img src="assets/bootstrapactions.png" alt="All bootstrap actions" style="width: 600px; padding: 5px"/></div>
+`install_bioawk.sh` just installs bioawk, and `copy_files_to_node.sh` is the script you created in a previous step that securely copies the dbGaP key and step script on S3 to each node of the EMR cluster. [`set_up_sra_tools.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/set_up_sra_tools.sh) downloads and installs SRA Tools, which includes `fastq-dump`. The script also configures a workspace on the encrypted partition using the dbGaP key so that `fastq-dump` can download samples from the dbGaP project protected by the key.
 18. Click **Next**. Under **Security Options**, make sure **Proceed without an EC2 key pair** is selected in the drop-down menu. This prevents SSHing to the cluster.
 19. Under **EC2 security groups**, for **Master**, select the security group with the prefix `dbgap` and `EC2MasterSecurityGroup` in its name; for **Core & Task**, select the security group with the prefix `dbgap` and `EC2SlaveSecurityGroup` in its name. (A warning may appear while you're performing these tasks; it'll disappear once both security groups are selected.) These security groups prevent connections that originate from outside the cluster. EMR automatically pokes holes in these security groups to accommodate only essential web services.
 20. Under **Encryption options**, select **S3 server-side encryption** from the drop-down menu next to **S3 Encryption (with EMRFS)**. This enables encryption at rest on S3 by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
+<div align="center"><img src="assets/securityoptions.png" alt="Security options" style="width: 600px; padding: 5px"/></div>
 21. Click **Create cluster**. The EMR interface for monitoring your job flow will appear. Wait for the job flow to complete.
-22. After the job flow is finished, click **S3** in the AWS console. Navigate to the folder `s3://rail-dbgap-secure/test/out`. The output files in this directory list k-mers and the number of samples in which each k-mer was found. You can click to download them. *If these data weren't test data and were actually dbGaP-protected, you would not be allowed do this unless your local device were authorized to store the data.*
+22. After the job flow is finished, the EMR interface should look as follows.
+<div align="center"><img src="assets/emrinterfaceafter.png" alt="EMR interface" style="width: 600px; padding: 5px"/></div>
+Click **Terminate** to terminate the cluster. Now click **S3** in the AWS console. Navigate to the folder `s3://rail-dbgap-secure/test/out`. The output text files in this directory list k-mers and the number of samples in which each k-mer was found. You can click to download them. *If these data weren't test data and were actually dbGaP-protected, you would not be allowed do this unless your local device were authorized to store the data.*
+<div align="center"><img src="assets/s3out.png" alt="S3 after job flow" style="width: 600px; padding: 5px"/></div>
 
 <a id="tcga"></a>
 ## TCGA
