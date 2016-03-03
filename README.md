@@ -1,4 +1,5 @@
-# Rail-dbGaP: a protocol for analyzing dbGaP-protected data from the Sequence Read Archive using Amazon Elastic MapReduce
+# The Rail-dbGaP protocol
+#### Analyzing dbGaP-protected data from the Sequence Read Archive using Amazon Elastic MapReduce
 
 ## Table of Contents
 1. [MapReduce and Elastic MapReduce](README.md#mr)
