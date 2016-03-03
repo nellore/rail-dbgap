@@ -228,40 +228,12 @@ to tell Hadoop that each mapper should be passed a single line of the input file
 18. Click **Next**. Under **Security Options**, make sure **Proceed without an EC2 key pair** is selected in the drop-down menu. This prevents SSHing to the cluster.
 19. Under **EC2 security groups**, for **Master**, select the security group with the prefix `dbgap` and `EC2MasterSecurityGroup` in its name; for **Core & Task**, select the security group with the prefix `dbgap` and `EC2SlaveSecurityGroup` in its name. These security groups prevent connections that originate from outside the cluster. EMR automatically pokes holes in these security groups to accommodate only essential web services.
 20. Under **Encryption options**, select **S3 server-side encryption** from the drop-down menu next to **S3 Encryption (with EMRFS)**. This enables encryption at rest on S3 by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
-21.
+21. Click **Create cluster**. The EMR interface for monitoring your job flow will appear. Wait for the job flow to complete.
+22. After the job flow is finished, click **S3** in the AWS console. Navigate to the folder `s3://rail-dbgap-secure/test/out`. The output files in this directory list k-mers and the number of samples in which each k-mer was found. You can click to download them. *If these data weren't test data and were actually dbGaP-protected, you would not be allowed do this unless your local device were authorized to store the data.*
 
-<div align="center"><img src="assets/oldnewpass.png" alt="Change password" style="width:400px; padding: 5px"/></div>
-2. Run
+### TCGA
 
-        rail-rna go elastic
-          -a hg38
-          -o s3://this-is-a-bucket-name-the-user-makes-up/dbgaptest
-          -c 1
-          -m https://raw.githubusercontent.com/nellore/rail/master/ex/secure.manifest
-          --secure-stack-name dbgap
-          --profile dbgap
-          --dbgap-key /path/to/prj_phs710EA_test.ngc
-
-to submit a secure job flow into the public subnet of the VPC created above that preprocesses and aligns the test sample. Use the EMR interface to monitor the progress of the job flow, and check the bucket `s3://this-is-a-bucket-name-the-user-names-up/dbgaptest` for results after it's done.
-
-### Analyze dbGaP-protected data
-
-The user may now submit Rail-RNA jobs that analyze dbGaP-protected data from their computer. A line in a manifest file (as described in the [tutorial](tutorial.md) and [reference](reference.md)) corresponding to a dbGaP-protected sample has the following format.
-```
-dbgap:<SRA run accession number>(tab)0(tab)<sample label>
-```
-where a run accession number from SRA begins with `SRR`, `ERR`, or `DRR`. An example manifest file is the [test manifest file](https://raw.githubusercontent.com/nellore/rail/master/ex/secure.manifest) used in the previous section. Every Rail-RNA command analyzing dbGaP data should include the command-line parameters `--secure-stack-name dbgap --profile dbgap --dbgap-key [the key file with the NGC extension you download]` and should write to the secure bucket created by the administrator. An example command follows.
-```
-rail-rna go elastic
-  -m dbgap.manifest
-  -a hg38
-  -o s3://this-is-a-bucket-name-the-user-makes-up/dbgapout
-  -c 1
-  --secure-stack-name dbgap
-  --profile dbgap
-  --dbgap-key /path/to/some_dbgap_key.ngc
-```
-Rail-RNA does not currently support analyzing TCGA data.
+While we do not provide explicit instruction on how to download [TCGA](http://cancergenome.nih.gov/) data, the user may substitute the SRA Tools bootstrap and `fastq-dump` for analogs that use [CGHub](https://cghub.ucsc.edu/)'s GeneTorrent or the [Seven Bridges API](https://www.bioconductor.org/packages/devel/bioc/vignettes/sevenbridges/inst/doc/easy_api_v2.html). No other parts of the Rail-dbGaP protocol need modification.
 
 ### Helpful notes for administrators
 
