@@ -188,9 +188,9 @@ This script will be a bootstrap action that securely transfers the key to each E
 
         bash -c 'read SRR;
         KMERSIZE=21;
-        cd /mnt/space/secure;
+        cd /mnt/space/sra_workspace/secure;
         fastq-dump ${SRR} --stdout -X 10000
-          | bioawk -v kmersize=${KMERSIZE} -v srr=${SRR} -c fastx
+          | bioawk -c fastx -v kmersize=${KMERSIZE} -v srr=${SRR}
             "{ 
                 for (i=1; i<=length($seq)-kmersize; i++) {
                     subseq=substr($seq, i, kmersize);
@@ -202,7 +202,7 @@ This script will be a bootstrap action that securely transfers the key to each E
                     }
                 }
             }"'
-on one line. This describes a mapper that uses [SRA Tools](https://github.com/ncbi/sra-tools) `fastq-dump` to grab an input sample from SRA and Heng Li's [bioawk]()https://github.com/lh3/bioawk to extract k-mers (for k=21) from its read sequences to print either the k-mer or its reverse complement, whichever is first in lexicographic order. `UniqValueCount` refers to how aggregation should be performed by Hadoop Streaming: the reducer described in the next step will count the number of unique run accession numbers associated with a given k-mer. The command-line parameter `-X 10000` of `fastq-dump` grabs only the first 10,000 reads of each sample for the purpose of demonstration only. Both SRA Tools and bioawk will have to be installed by bootstrap scripts, which are configured in later steps.
+on one line. This describes a mapper that uses [SRA Tools](https://github.com/ncbi/sra-tools) `fastq-dump` to grab an input sample from SRA and Heng Li's [bioawk](https://github.com/lh3/bioawk) to extract k-mers (for k=21) from its read sequences to print either the k-mer or its reverse complement, whichever is first in lexicographic order. `UniqValueCount` refers to how aggregation should be performed by Hadoop Streaming: the reducer described in the next step will count the number of unique run accession numbers associated with a given k-mer. The command-line parameter `-X 10000` of `fastq-dump` grabs only the first 10,000 reads of each sample for the purpose of demonstration only. Both SRA Tools and bioawk will have to be installed by bootstrap scripts, which are configured in later steps.
 9. Next to **Reducer**, enter
 
         aggregate
