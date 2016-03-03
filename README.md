@@ -162,8 +162,8 @@ Different policies including only some of the permissions from these may be incl
         aws emr create-default-roles --profile dbgap
 to retrieve the default Elastic MapReduce roles created by the administrator.
 
-<a id="kmer"></a>
 ## Studying k-mers in dbGaP-protected samples with EMR
+<a id="kmer"></a>
 
 This section reviews the implementation of an EMR pipeline that ingests dbGaP-protected data and counts the number of samples in which each *k*-mer found in least one read across samples appears. [dbGaP support](https://dbgap.ncbi.nlm.nih.gov/aa/wga.cgi?page=login) has kindly provided a dataset composed of public RNA-seq samples from [1000 Genomes](http://www.1000genomes.org/) exclusively for testing secure cloud-based pipelines. Its project accession number on SRA is [SRP041052](http://trace.ncbi.nlm.nih.gov/Traces/sra/?study=SRP041052), and the steps below use three samples from it.
 
