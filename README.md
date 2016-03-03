@@ -160,34 +160,31 @@ This section reviews the implementation of an EMR pipeline that ingests dbGaP-pr
 
 Assume the secure bucket created during [AWS setup](README.md#setup) is at `s3://rail-dbgap-secure`. The following is performed on the user's computer, where the AWS CLI was installed.
 
-1. Download [the dbGaP repository key](ftp://ftp.ncbi.nlm.nih.gov/sra/examples/decrypt_examples/prj_phs710EA_test.ngc) for the test data. Upload the key to S3 securely with the AWS CLI by entering
+1. Download the dbGaP repository key for the test data at `ftp://ftp.ncbi.nlm.nih.gov/sra/examples/decrypt_examples/prj_phs710EA_test.ngc`. Upload the key to S3 securely with the AWS CLI by entering
 
-        aws s3 cp /path/to/prj_phs710EA_test.ngc s3://rail-dbgap-secure/test/prj_phs710EA_test.ngc --profile dbgap
+        aws s3 cp /path/to/prj_phs710EA_test.ngc s3://rail-dbgap-secure/test/prj_phs710EA_test.ngc --profile dbgap --sse
 It is recommended that you delete the key from your computer with
 
         rm /path/to/prj_phs710EA_test.ngc
 2. Using a text editor, create a script `copy_key_to_node.sh` with the following contents.
 
         #!/usr/bin/env bash
+        set -ex
         aws s3 cp s3://rail-dbgap-secure/test/prj_phs710EA_test.ngc /mnt/space/DBGAP.ngc
 Copy the script to S3 as follows.
 
-        aws s3 cp /path/to/copy_key_to_node.sh s3://rail-dbgap-secure/test/
+        aws s3 cp /path/to/copy_key_to_node.sh s3://rail-dbgap-secure/test/ --profile dbgap --sse
 This script will be a bootstrap action that securely transfers the key to each EC2 instance.
 3. Download [this list](https://raw.githubusercontent.com/nellore/rail-dbgap/master/manifest.txt) of three SRA run accession numbers from test dbGaP project [SRP041052](http://trace.ncbi.nlm.nih.gov/Traces/sra/?study=SRP041052). Copy it to S3 as follows
 
-        aws s3 cp /path/to/manifest.txt s3://rail-dbgap-secure/test/
+        aws s3 cp /path/to/manifest.txt s3://rail-dbgap-secure/test/ --profile dbgap --sse
 
 3. Navigate to the login page URL from *credentials (2).csv*. The AWS console should appear immediately or after you log in with the credentials from this CSV.
 4. Click **EMR**, then **Create cluster**, and finally **Go to advanced options**.
-5. Under **Software Configuration**, ensure the Vendor Amazon is selected, and deselect all items except Hadoop.
-6. Under **Edit software settings (optional)**, click **Load JSON from S3**, and enter the URL
-
-        s3://rail-emr/hadoop_configuration.json
-This sets the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true` to ensure encryption of data in transit. The JSON file may also be viewed [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/hadoop_configuration.json).
-7. Under **Add steps (optional), select **Streaming program** next to **Step type**, and click **Configure**.
-8. Next to **Name**, type `Count number of samples in which each k-mer appears`.
-9. Next to **Mapper**, enter
+5. Under **Software Configuration**ensure the Vendor Amazon is selected, and select 3.11.0 under Release.
+6. Under **Add steps (optional), select **Streaming program** next to **Step type**, and click **Configure**.
+7. Next to **Name**, type "Count number of samples in which each k-mer appears".
+8. Next to **Mapper**, enter
 
     read SRR;
     KMERSIZE=21;
@@ -206,31 +203,31 @@ This sets the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=tr
             }
         }'
 on one line. This describes a mapper that uses [SRA Tools](https://github.com/ncbi/sra-tools) `fastq-dump` to grab an input sample from SRA and Heng Li's [bioawk]()https://github.com/lh3/bioawk to extract k-mers (for k=21) from its read sequences to print either the k-mer or its reverse complement, whichever is first in lexicographic order. `UniqValueCount` refers to how aggregation should be performed by Hadoop Streaming: the reducer described in the next step will count the number of unique run accession numbers associated with a given k-mer. The command-line parameter `-X 10000` of `fastq-dump` grabs only the first 10,000 reads of each sample for the purpose of demonstration only. Both SRA Tools and bioawk will have to be installed by bootstrap scripts, which are configured in later steps.
-10. Next to **Reducer**, enter
+9. Next to **Reducer**, enter
 
         aggregate
 This allows the `UniqValueCount`s output by the mappers to be interpreted properly. See [this page](https://hadoop.apache.org/docs/r1.2.1/streaming.html#Hadoop+Aggregate+Package) for more information on the Hadoop Aggregate package.
-11. Next to **Input S3 location**, enter
+10. Next to **Input S3 location**, enter
 
         s3://rail-dbgap-secure/test/manifest.txt
 A given line of this file, which you uploaded to S3 in an earlier step, is passed to a mapper.
-12. Next to **Output S3 location**, enter
+11. Next to **Output S3 location**, enter
 
        s3://rail-dbgap-secure/test/out
 This is where the number of samples in which each k-mer appears will be written.
-13. In the **Arguments** box, enter
+12. In the **Arguments** box, enter
 
         -inputformat org.apache.hadoop.mapred.lib.NLineInputFormat
 to tell Hadoop that each mapper should be passed a single line of the input file `manifest.txt`.
-14. Click **Add**, then click **Next**. Under **Hardware Configuration**, click the **Network** drop-down menu, and select the VPC that does not have **(default)** next to it. This is the VPC that was created as part of the secure CloudFormation stack during AWS setup.
-15. Select 1 `m3.xlarge` for the master EC2 instance group, and 1 `m3.xlarge` for the core EC2 instance group.
-16. Click **Next**. Under **Logging**, enter the S3 folder `s3://rail-dbgap-secure/logs/` to ensure that logs end up in the secure bucket created as part of the CloudFormation stack during AWS setup. Keep **Debugging** and **Termination protection** unselected; debugging won't be used here, and termination protection just prevents termination of the EMR cluster from the API or the command line.
-17. Next to **Bootstrap Actions**, select **Custom action** from the drop-down menu, and click **Configure and add.** Enter the name "Encrypt local storage", and specify the **JAR location** `s3://rail-emr/encrypt_local_storage.sh`, which is exactly the script [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh). As described in the [Rail-dbGaP protocol specification](README.md#spec), this script uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a randomly generated keyfile, where temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links.
-18. In exactly the same way, configure bootstrap actions to obtain the results depicted below. (Note that these four bootstrap actions should be in the order shown there.) `install_bioawk.sh` just installs bioawk, and `copy_key_to_node.sh` is the script you created in a previous step that securely copies the dbGaP key on S3 to each node of the EMR cluster. [`set_up_sra_tools.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/set_up_sra_tools.sh) downloads and installs SRA Tools, which includes `fastq-dump`. The script also configures a workspace on the encrypted partition using the dbGaP key so that `fastq-dump` can download samples from the dbGaP project protected by the key.
-19. Click **Next**. Under **Security Options**, make sure **Proceed without an EC2 key pair** is selected in the drop-down menu. This prevents SSHing to the cluster.
-20. Under **EC2 security groups**, for **Master**, select the security group with the prefix `dbgap` and `EC2MasterSecurityGroup` in its name; for **Core & Task**, select the security group with the prefix `dbgap` and `EC2SlaveSecurityGroup` in its name. These security groups prevent connections that originate from outside the cluster. EMR automatically pokes holes in these security groups to accommodate only essential web services.
-21. Under **Encryption options**, select **S3 server-side encryption** from the drop-down menu next to **S3 Encryption (with EMRFS)**. This enables encryption at rest on S3. Step 6 above also achieves this end programmatically; we included it to illustrate the alternative method.
-22.
+13. Click **Add**, then click **Next**. Under **Hardware Configuration**, click the **Network** drop-down menu, and select the VPC that does not have **(default)** next to it. This is the VPC that was created as part of the secure CloudFormation stack during AWS setup.
+14. Select 1 `m3.xlarge` for the master EC2 instance group, and 1 `m3.xlarge` for the core EC2 instance group.
+15. Click **Next**. Under **Logging**, enter the S3 folder `s3://rail-dbgap-secure/logs/` to ensure that logs end up in the secure bucket created as part of the CloudFormation stack during AWS setup. Keep **Debugging** selected, but deselect **Termination protection**; turning this option on would simply prevent termination of the EMR cluster from the API or the command line.
+16. Next to **Bootstrap Actions**, select **Custom action** from the drop-down menu, and click **Configure and add.** Enter the name "Encrypt local storage", and specify the **JAR location** `s3://rail-emr/encrypt_local_storage.sh`, which is exactly the script [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh). As described in the [Rail-dbGaP protocol specification](README.md#spec), this script uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a randomly generated keyfile, where temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links.
+17. In exactly the same way, configure bootstrap actions to obtain the first four bootstrap actions depicted below. (Note that these four bootstrap actions should be in the order shown there.) `install_bioawk.sh` just installs bioawk, and `copy_key_to_node.sh` is the script you created in a previous step that securely copies the dbGaP key on S3 to each node of the EMR cluster. [`set_up_sra_tools.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/set_up_sra_tools.sh) downloads and installs SRA Tools, which includes `fastq-dump`. The script also configures a workspace on the encrypted partition using the dbGaP key so that `fastq-dump` can download samples from the dbGaP project protected by the key.
+18. Click **Next**. Under **Security Options**, make sure **Proceed without an EC2 key pair** is selected in the drop-down menu. This prevents SSHing to the cluster.
+19. Under **EC2 security groups**, for **Master**, select the security group with the prefix `dbgap` and `EC2MasterSecurityGroup` in its name; for **Core & Task**, select the security group with the prefix `dbgap` and `EC2SlaveSecurityGroup` in its name. These security groups prevent connections that originate from outside the cluster. EMR automatically pokes holes in these security groups to accommodate only essential web services.
+20. Under **Encryption options**, select **S3 server-side encryption** from the drop-down menu next to **S3 Encryption (with EMRFS)**. This enables encryption at rest on S3 by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
+21.
 
 <div align="center"><img src="assets/oldnewpass.png" alt="Change password" style="width:400px; padding: 5px"/></div>
 2. Run

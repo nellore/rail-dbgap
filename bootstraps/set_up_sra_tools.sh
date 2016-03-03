@@ -5,18 +5,18 @@ export HOME=/home/hadoop
 # Download and install SRA Tools
 curl -O http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.5.7/sratoolkit.2.5.7-centos_linux64.tar.gz
 tar xvzf sratoolkit.2.5.7-centos_linux64.tar.gz
-sudo ln -s sratoolkit.2.5.7-centos_linux64/bin/fastq-dump /usr/local/bin
+sudo ln -s $(pwd)/sratoolkit.2.5.7-centos_linux64/bin/fastq-dump /usr/local/bin
 
 # Set up two workspaces: an insecure one and a secure one
-mkdir -p {vdb_workspace}/insecure
+mkdir -p /mnt/space/sra_workspace/insecure
 mkdir -p ~/.ncbi
 # The following code ensures that the fastq-dump's cache is disabled to save space on local disks
 cat >~/.ncbi/user-settings.mkfg <<EOF
 /repository/user/cache-disabled = "true"
-/repository/user/main/public/root = "{vdb_workspace}/insecure"
+/repository/user/main/public/root = "/mnt/space/sra_workspace/insecure"
 EOF
-mkdir -p {vdb_workspace}/secure
-{vdb_config} --import /mnt/space/DBGAP.ngc {vdb_workspace}/secure
+mkdir -p /mnt/space/sra_workspace/secure
+$(pwd)/sratoolkit.2.5.7-centos_linux64/bin/vdb-config --import /mnt/space/DBGAP.ngc /mnt/space/sra_workspace/secure
 cat >.fix_config.py <<EOF
 \"""
 .fix_config.py
