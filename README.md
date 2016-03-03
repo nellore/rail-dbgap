@@ -166,15 +166,16 @@ Assume the secure bucket created during [AWS setup](README.md#setup) is at `s3:/
 It is recommended that you delete the key from your computer with
 
         rm /path/to/prj_phs710EA_test.ngc
-2. Using a text editor, create a script `copy_key_to_node.sh` with the following contents.
+2. Using a text editor, create a script `copy_files_to_node.sh` with the following contents.
 
         #!/usr/bin/env bash
         set -ex
         aws s3 cp s3://rail-dbgap-secure/test/prj_phs710EA_test.ngc /mnt/space/DBGAP.ngc
+        aws s3 cp s3://rail-emr/step.sh /mnt/space/step.sh
 Copy the script to S3 as follows.
 
-        aws s3 cp /path/to/copy_key_to_node.sh s3://rail-dbgap-secure/test/ --profile dbgap --sse
-This script will be a bootstrap action that securely transfers the key to each EC2 instance.
+        aws s3 cp /path/to/copy_files_to_node.sh s3://rail-dbgap-secure/test/ --profile dbgap --sse
+This script will be a bootstrap action that a) securely transfers the key to each EC2 instance and b) copies the mapper script to each instance. The mapper script is discussed below.
 3. Download [this list](https://raw.githubusercontent.com/nellore/rail-dbgap/master/manifest.txt) of three SRA run accession numbers from test dbGaP project [SRP041052](http://trace.ncbi.nlm.nih.gov/Traces/sra/?study=SRP041052). Copy it to S3 as follows
 
         aws s3 cp /path/to/manifest.txt s3://rail-dbgap-secure/test/ --profile dbgap --sse
@@ -186,11 +187,17 @@ This script will be a bootstrap action that securely transfers the key to each E
 7. Next to **Name**, type "Count number of samples in which each k-mer appears".
 8. Next to **Mapper**, enter
 
-        bash -xc '{ IFS= read -r SRR; 
+        bash /mnt/space/step.sh 
+This is the script [here](https://github.com/nellore/rail-dbgap/blob/master/step.sh) and is reproduced below.
+
+        #!/usr/bin/env bash
+        set -ex;
+        cut -f2 | { IFS= read -r SRR;
         KMERSIZE=21;
+        cd /mnt/space/sra_workspace/secure;
         fastq-dump ${SRR} --stdout -X 10000 \
-          | ~/bioawk/bioawk -v kmersize=${KMERSIZE} -v srr=${SRR} -c fastx \
-            '\''{ 
+          | bioawk -v kmersize=${KMERSIZE} -v srr=${SRR} -c fastx \
+            '{
                 for (i=1; i<=length($seq)-kmersize; i++) {
                     revcompsubseq = substr($seq, i, kmersize);
                     subseq = revcompsubseq;
@@ -201,9 +208,9 @@ This script will be a bootstrap action that securely transfers the key to each E
                         print "UniqValueCount:" subseq "\t" srr;
                     }
                 }
-            }'\''
-        }'
-on one line. This describes a mapper that uses [SRA Tools](https://github.com/ncbi/sra-tools) `fastq-dump` to grab an input sample from SRA and [Heng Li](http://lh3lh3.users.sourceforge.net/)'s [bioawk](https://github.com/lh3/bioawk) to extract k-mers (for k=21) from its read sequences to print either the k-mer or its reverse complement, whichever is first in lexicographic order. `UniqValueCount` refers to how aggregation should be performed by Hadoop Streaming: the reducer described in the next step will count the number of unique run accession numbers associated with a given k-mer. The command-line parameter `-X 10000` of `fastq-dump` grabs only the first 10,000 reads of each sample for the purpose of demonstration only. Both SRA Tools and bioawk will have to be installed by bootstrap scripts, which are configured in later steps.
+            }'
+        }
+It describes a mapper that uses [SRA Tools](https://github.com/ncbi/sra-tools) `fastq-dump` to grab an input sample from SRA and [Heng Li](http://lh3lh3.users.sourceforge.net/)'s [bioawk](https://github.com/lh3/bioawk) to extract k-mers (for k=21) from its read sequences to print either the k-mer or its reverse complement, whichever is first in lexicographic order. `UniqValueCount` refers to how aggregation should be performed by Hadoop Streaming: the reducer described in the next step will count the number of unique run accession numbers associated with a given k-mer. The command-line parameter `-X 10000` of `fastq-dump` grabs only the first 10,000 reads of each sample for the purpose of demonstration only. Both SRA Tools and bioawk will have to be installed by bootstrap scripts, which are configured in later steps.
 9. Next to **Reducer**, enter
 
         aggregate
