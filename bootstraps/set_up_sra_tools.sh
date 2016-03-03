@@ -18,11 +18,11 @@ EOF
 mkdir -p /mnt/space/sra_workspace/secure
 $(pwd)/sratoolkit.2.5.7-centos_linux64/bin/vdb-config --import /mnt/space/DBGAP.ngc /mnt/space/sra_workspace/secure
 cat >.fix_config.py <<EOF
-\"""
+"""
 .fix_config.py
 
 Makes sure cache is disabled in vdb-config file
-\"""
+"""
 
 import sys
 
