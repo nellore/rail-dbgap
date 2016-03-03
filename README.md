@@ -10,13 +10,13 @@
 
 The [National Institutes of Health (NIH)](http://www.nih.gov) maintains security [requirements](https://gds.nih.gov/) and [recommmendations](http://www.ncbi.nlm.nih.gov/projects/gap/pdf/dbgap_2b_security_procedures.pdf) for analyzing controlled-access genomic data, including [dbGaP](http://www.ncbi.nlm.nih.gov/gap)-protected data. Rail-dbGaP is a protocol described in [this preprint](http://j.mp/rail-dbgap) for securely analyzing dbGaP-protected genomic data from the [Sequence Read Archive (SRA)](http://www.ncbi.nlm.nih.gov/sra) in the cloud with [Amazon Elastic MapReduce (EMR)] in a manner compliant with NIH guidelines. The protocol is implemented in [Rail-RNA](http://rail.bio/), software for scalable analysis of many hundreds of RNA sequencing (RNA-seq) samples. A step-by-step guide for setting up Rail-RNA to analyze dbGaP-protected RNA-seq data is provided in the Rail documentation [here](http://docs.rail.bio/dbgap/); the present document contains a [technical specification](README.md#spec) of the Rail-dbGaP protocol and [walks the user](README.md#kmer) through an example implementation that counts the number of input samples (i.e., [SRA run accession numbers](http://www.ncbi.nlm.nih.gov/books/NBK56913/#search.what_do_the_different_sra_accessi)) in which each k-mer present in at least one read from among the samples appears. A preprint describing the Rail-dbGaP protocol is available [here](http://j.mp/rail-dbgap).
 
-<a id="mr"></a>
 ## MapReduce and Elastic MapReduce
+<a id="mr"></a>
 
 The [MapReduce](https://en.wikipedia.org/wiki/MapReduce) programming model divides a problem into a sequence of alternating computation and aggregation steps. Each step is performed by distributing independent tasks across workers in a cluster of computers. [Elastic MapReduce (EMR)](https://aws.amazon.com/elasticmapreduce/) is a [Hadoop](http://hadoop.apache.org/)-based implementation of MapReduce especially for a cluster of [Elastic Compute Cloud (EC2)](https://aws.amazon.com/ec2/) instances, or virtualized computers, on [Amazon Web Services](https://aws.amazon.com/), a commercial cloud provider. EMR reads input from the web and/or Simple Storage Service (S3), Amazon's cloud storage service, and writes its output back to S3.
 
-<a id="spec"></a>
 ## Rail-dbGaP protocol specification
+<a id="spec"></a>
 
 Rail-dbGaP secures an EMR cluster so it is compliant with NIH guidelines as follows. (See Figure 1 of the [preprint](http://j.mp/rail-dbgap) for an illustration. The sections [Setting up Amazon Web Services](README.md#setup) and [Studying k-mers in dbGaP-protected samples with EMR](README.md#kmer) put together protocol elements to show their implementation explicitly.)
 
@@ -32,8 +32,8 @@ Rail-dbGaP secures an EMR cluster so it is compliant with NIH guidelines as foll
 
 6. **Audit logs are enabled.** These record logins and actions taken by the user and on the user's behalf, including API calls made by processes running on the cluster. On AWS, audit logs take the form of CloudTrail logs stored in encrypted S3 buckets. They are enabled when a stack is created with the dbGaP template [`cloudformation/dbgap.template`](cloudformation/dbgap.template).
 
-<a id="setup"></a>
 ## Setting up Amazon Web Services
+<a id="setup"></a>
 
 The steps below create a new [AWS IAM](https://aws.amazon.com/iam/) account especially for analyzing dbGaP-protected data. To perform these steps, both user and AWS site administrator should be available. (For many investigators, user and administrator will be the same person.) It is recommended that they are physically together to minimize passing of credentials. Before continuing, the user should install the [AWS Command Line Interface (CLI)](https://aws.amazon.com/cli/). Optionally, the user may also have [requested access](https://dbgap.ncbi.nlm.nih.gov/aa/dbgap_request_process.pdf) to some dbGaP-protected sample on the [Sequence Read Archive](http://www.ncbi.nlm.nih.gov/sra) (SRA) and received a key file with an `ngc` extension.
 
@@ -93,8 +93,8 @@ at a terminal prompt on the user's computer. Enter the AWS Access Key ID, AWS Se
 4. *User:* navigate to the login page URL from *credentials (2).csv*, log in, and change the password as prompted.
 <div align="center"><img src="assets/oldnewpass.png" alt="Change password" style="width:400px; padding: 5px"/></div>
 
-<a id="cloudform"></a>
 ### Create a secure CloudFormation stack (administrator)
+<a id="cloudform"></a>
 
 [CloudFormation](https://aws.amazon.com/cloudformation/) facilitates creation and management of a group of related AWS resources. Rail-dbGaP provides CloudFormation template for creating a [Virtual Private Cloud](https://aws.amazon.com/vpc/) (VPC) with a [single public subnet](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Scenario1.html). An EMR job flow that analyzes dbGaP data should be launched into this subnet. The VPC is supplemented by several security features, including
 
@@ -261,13 +261,13 @@ Now click **Next**. Under **Hardware Configuration**, click the **Network** drop
 Click **Terminate** to terminate the cluster. Now click **S3** in the AWS console. Navigate to the folder `s3://rail-dbgap-secure/test/out`. The output text files in this directory list k-mers and the number of samples in which each k-mer was found. You can click to download them. *If these data weren't test data and were actually dbGaP-protected, you would not be allowed do this unless your local device were authorized to store the data.*
 <div align="center"><img src="assets/s3out.png" alt="S3 after job flow" style="width: 600px; padding: 5px"/></div>
 
-<a id="tcga"></a>
 ## TCGA
+<a id="tcga"></a>
 
 While we do not provide explicit instruction on how to download [TCGA](http://cancergenome.nih.gov/) data, the user may substitute the SRA Tools bootstrap and `fastq-dump` for analogs that use [CGHub](https://cghub.ucsc.edu/)'s GeneTorrent or the [Seven Bridges API](https://www.bioconductor.org/packages/devel/bioc/vignettes/sevenbridges/inst/doc/easy_api_v2.html). No other parts of the Rail-dbGaP protocol need modification.
 
-<a id="admin"></a>
 ## Helpful notes for administrators
+<a id="admin"></a>
 
 As for any new AWS account, you should consider how you would like to configure billing.  [Consolidated billing](http://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/consolidated-billing.html) can be convenient if you are managing multiple AWS accounts simultaneously.
 
