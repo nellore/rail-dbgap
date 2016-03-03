@@ -191,7 +191,7 @@ This script will be a bootstrap action that a) securely transfers the key to eac
 3. Navigate to the login page URL from *credentials (2).csv*. The AWS console should appear immediately or after you log in with the credentials from this CSV.
 4. Click **EMR**, then **Create cluster**, and finally **Go to advanced options**.
 <div align="center"><img src="assets/emrconsole.png" alt="Select EMR" style="width: 600px; padding: 5px"/></div>
-<div align="center"><img src="assets/createcluster.png" alt="Create cluster" style="padding: 5px"/></div>
+<div align="center"><img src="assets/createcluster.png" alt="Create cluster" style="width: 600px; padding: 5px"/></div>
 <div align="center"><img src="assets/advancedoptions.png" alt="Advanced options" style="width: 600px; padding: 5px"/></div>
 5. Under **Software Configuration**, ensure the Vendor Amazon is selected, and select 3.11.0 under Release. Deselect all software except Hadoop 2.4.0.
 6. Under **Add steps (optional)**, select **Streaming program** next to **Step type**, and click **Configure**.
