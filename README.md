@@ -1,7 +1,16 @@
-# Rail-dbGaP
+# Rail-dbGaP: a protocol for analyzing dbGaP-protected data from the Sequence Read Archive using Amazon Elastic MapReduce
+
+## Table of Contents
+1. [MapReduce and Elastic MapReduce](README.md#mr)
+2. [Rail-dbGaP protocol specification](README.md#spec)
+3. [Setting up Amazon Web Services](README.md#setup)
+4. [Studying k-mers in dbGaP-protected samples with EMR](README.md#kmer)
+5. [A note on TCGA data](README.md#tcga)
+6. [Helpful notes for administrators](README.md#admin)
 
 The [National Institutes of Health (NIH)](http://www.nih.gov) maintains security [requirements](https://gds.nih.gov/) and [recommmendations](http://www.ncbi.nlm.nih.gov/projects/gap/pdf/dbgap_2b_security_procedures.pdf) for analyzing controlled-access genomic data, including [dbGaP](http://www.ncbi.nlm.nih.gov/gap)-protected data. Rail-dbGaP is a protocol described in [this preprint](http://j.mp/rail-dbgap) for securely analyzing dbGaP-protected genomic data from the [Sequence Read Archive (SRA)](http://www.ncbi.nlm.nih.gov/sra) in the cloud with [Amazon Elastic MapReduce (EMR)] in a manner compliant with NIH guidelines. The protocol is implemented in [Rail-RNA](http://rail.bio/), software for scalable analysis of many hundreds of RNA sequencing (RNA-seq) samples. A step-by-step guide for setting up Rail-RNA to analyze dbGaP-protected RNA-seq data is provided in the Rail documentation [here](http://docs.rail.bio/dbgap/); the present document contains a [technical specification](README.md#spec) of the Rail-dbGaP protocol and [walks the user](README.md#kmer) through an example implementation that counts the number of input samples (i.e., [SRA run accession numbers](http://www.ncbi.nlm.nih.gov/books/NBK56913/#search.what_do_the_different_sra_accessi)) in which each k-mer present in at least one read from among the samples appears. A preprint describing the Rail-dbGaP protocol is available [here](http://j.mp/rail-dbgap).
 
+<a id="mr"></a>
 ## MapReduce and Elastic MapReduce
 
 The [MapReduce](https://en.wikipedia.org/wiki/MapReduce) programming model divides a problem into a sequence of alternating computation and aggregation steps. Each step is performed by distributing independent tasks across workers in a cluster of computers. [Elastic MapReduce (EMR)](https://aws.amazon.com/elasticmapreduce/) is a [Hadoop](http://hadoop.apache.org/)-based implementation of MapReduce especially for a cluster of [Elastic Compute Cloud (EC2)](https://aws.amazon.com/ec2/) instances, or virtualized computers, on [Amazon Web Services](https://aws.amazon.com/), a commercial cloud provider. EMR reads input from the web and/or Simple Storage Service (S3), Amazon's cloud storage service, and writes its output back to S3.
@@ -182,13 +191,13 @@ This script will be a bootstrap action that a) securely transfers the key to eac
 
 3. Navigate to the login page URL from *credentials (2).csv*. The AWS console should appear immediately or after you log in with the credentials from this CSV.
 4. Click **EMR**, then **Create cluster**, and finally **Go to advanced options**.
-5. Under **Software Configuration**ensure the Vendor Amazon is selected, and select 3.11.0 under Release.
-6. Under **Add steps (optional), select **Streaming program** next to **Step type**, and click **Configure**.
+5. Under **Software Configuration**, ensure the Vendor Amazon is selected, and select 3.11.0 under Release. Deselect all software except Hadoop 2.4.0.
+6. Under **Add steps (optional)**, select **Streaming program** next to **Step type**, and click **Configure**.
 7. Next to **Name**, type "Count number of samples in which each k-mer appears".
 8. Next to **Mapper**, enter
 
         bash /mnt/space/step.sh 
-This is the script [here](https://github.com/nellore/rail-dbgap/blob/master/step.sh) and is reproduced below.
+This is the script [here](https://github.com/nellore/rail-dbgap/blob/master/step.sh), and it is reproduced below.
 
         #!/usr/bin/env bash
         set -ex;
@@ -221,28 +230,32 @@ This allows the `UniqValueCount`s output by the mappers to be interpreted proper
 A given line of this file, which you uploaded to S3 in an earlier step, is passed to a mapper.
 11. Next to **Output S3 location**, enter
 
-       s3://rail-dbgap-secure/test/out
+        s3://rail-dbgap-secure/test/out/
 This is where the number of samples in which each k-mer appears will be written.
 12. In the **Arguments** box, enter
 
         -inputformat org.apache.hadoop.mapred.lib.NLineInputFormat
-to tell Hadoop that each mapper should be passed a single line of the input file `manifest.txt`.
-13. Click **Add**, then click **Next**. Under **Hardware Configuration**, click the **Network** drop-down menu, and select the VPC that does not have **(default)** next to it. This is the VPC that was created as part of the secure CloudFormation stack during AWS setup.
+to tell Hadoop that each mapper should be passed a single line of the input file `manifest.txt`. The box in which you're entering data should now look as depicted below.
+13. Click **Add**. The **Software Configuration** step is now finished and should look as follows. 
+
+Now click **Next**. Under **Hardware Configuration**, click the **Network** drop-down menu, and select the VPC that does not have **(default)** next to it. This is the VPC that was created as part of the secure CloudFormation stack during AWS setup.
 14. Select 1 `m3.xlarge` for the master EC2 instance group, and 1 `m3.xlarge` for the core EC2 instance group.
 15. Click **Next**. Under **Logging**, enter the S3 folder `s3://rail-dbgap-secure/logs/` to ensure that logs end up in the secure bucket created as part of the CloudFormation stack during AWS setup. Keep **Debugging** selected, but deselect **Termination protection**; turning this option on would simply prevent termination of the EMR cluster from the API or the command line.
-16. Next to **Bootstrap Actions**, select **Custom action** from the drop-down menu, and click **Configure and add.** Enter the name "Encrypt local storage", and specify the **JAR location** `s3://rail-emr/encrypt_local_storage.sh`, which is exactly the script [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh). As described in the [Rail-dbGaP protocol specification](README.md#spec), this script uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a randomly generated keyfile, where temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links.
+16. Next to **Bootstrap Actions**, select **Custom action** from the drop-down menu, and click **Configure and add**, Enter the **Name** "Encrypt local storage", and specify the **JAR location** `s3://rail-emr/encrypt_local_storage.sh`, which is exactly the script [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh). As described in the [Rail-dbGaP protocol specification](README.md#spec), this script uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a randomly generated keyfile, where temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links.
 17. In exactly the same way, configure bootstrap actions to obtain the first four bootstrap actions depicted below. (Note that these four bootstrap actions should be in the order shown there.) `install_bioawk.sh` just installs bioawk, and `copy_files_to_node.sh` is the script you created in a previous step that securely copies the dbGaP key and step script on S3 to each node of the EMR cluster. [`set_up_sra_tools.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/set_up_sra_tools.sh) downloads and installs SRA Tools, which includes `fastq-dump`. The script also configures a workspace on the encrypted partition using the dbGaP key so that `fastq-dump` can download samples from the dbGaP project protected by the key.
 18. Click **Next**. Under **Security Options**, make sure **Proceed without an EC2 key pair** is selected in the drop-down menu. This prevents SSHing to the cluster.
-19. Under **EC2 security groups**, for **Master**, select the security group with the prefix `dbgap` and `EC2MasterSecurityGroup` in its name; for **Core & Task**, select the security group with the prefix `dbgap` and `EC2SlaveSecurityGroup` in its name. These security groups prevent connections that originate from outside the cluster. EMR automatically pokes holes in these security groups to accommodate only essential web services.
+19. Under **EC2 security groups**, for **Master**, select the security group with the prefix `dbgap` and `EC2MasterSecurityGroup` in its name; for **Core & Task**, select the security group with the prefix `dbgap` and `EC2SlaveSecurityGroup` in its name. (A warning may appear while you're performing these tasks; it'll disappear once both security groups are selected.) These security groups prevent connections that originate from outside the cluster. EMR automatically pokes holes in these security groups to accommodate only essential web services.
 20. Under **Encryption options**, select **S3 server-side encryption** from the drop-down menu next to **S3 Encryption (with EMRFS)**. This enables encryption at rest on S3 by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
 21. Click **Create cluster**. The EMR interface for monitoring your job flow will appear. Wait for the job flow to complete.
 22. After the job flow is finished, click **S3** in the AWS console. Navigate to the folder `s3://rail-dbgap-secure/test/out`. The output files in this directory list k-mers and the number of samples in which each k-mer was found. You can click to download them. *If these data weren't test data and were actually dbGaP-protected, you would not be allowed do this unless your local device were authorized to store the data.*
 
-### TCGA
+<a id="tcga"></a>
+## TCGA
 
 While we do not provide explicit instruction on how to download [TCGA](http://cancergenome.nih.gov/) data, the user may substitute the SRA Tools bootstrap and `fastq-dump` for analogs that use [CGHub](https://cghub.ucsc.edu/)'s GeneTorrent or the [Seven Bridges API](https://www.bioconductor.org/packages/devel/bioc/vignettes/sevenbridges/inst/doc/easy_api_v2.html). No other parts of the Rail-dbGaP protocol need modification.
 
-### Helpful notes for administrators
+<a id="admin"></a>
+## Helpful notes for administrators
 
 As for any new AWS account, you should consider how you would like to configure billing.  [Consolidated billing](http://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/consolidated-billing.html) can be convenient if you are managing multiple AWS accounts simultaneously.
 
