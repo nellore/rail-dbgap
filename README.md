@@ -27,7 +27,7 @@ Rail-dbGaP secures an EMR cluster so it is compliant with NIH guidelines as foll
 
 2. **Inbound traffic to the cluster is restricted via security groups.** A security group is essentially a stateful firewall. A master security group for the master instance and a worker security group for worker instances prevent initiation of any connection to the cluster except by essential web services. These web services correspond to particular IPs and ports, and the most restrictive sets for master and worker instances are configured automatically. SSH access to the cluster is also restricted: the only interaction between user and cluster is via the EMR interface, which presents progress information through the essential web services. Security groups are also set up by creating a stack with the [CloudFormation](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) template [`cloudformation/dbgap.template`](cloudformation/dbgap.template). Master and worker instances must be associated with security groups when creating the EMR cluster.
 
-3. **Data are encrypted at rest.** During cluster setup, before any sensitive data has reached the cluster, each instance runs the preliminary script (i.e., bootstrap action) [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh) that uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a keyfile. The key is randomly generated on each instance and never exposed to the user. Temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links. (See line 128 of [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh).) Files written to cloud storage are also encrypted; Amazon S3 uses [AES256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard). This is enforced by the creation of a bucket with a policy barring uploads that do not turn on server-side encryption in the dbGaP template [`cloudformation/dbgap.template`](cloudformation/dbgap.template) and by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
+3. **Data are encrypted at rest.** During cluster setup, before any sensitive data has reached the cluster, each instance runs the preliminary script (i.e., bootstrap action) [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh) that uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a keyfile. The key is randomly generated on each instance and never exposed to the user. Temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links. (See line 128 of [`bootstraps/encrypt_local_storage.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh).) Files written to cloud storage are also encrypted; Amazon S3 uses [AES256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard). This is enforced by the creation of a bucket with a policy (i.e., rules governing user access to the bucket) barring uploads that do not turn on server-side encryption in the dbGaP template [`cloudformation/dbgap.template`](cloudformation/dbgap.template) and by setting the EMRFS configuration parameter `fs.s3.enableServerSideEncryption=true`.
 
 4. **Data are encrypted in transit.** Worker instances download dbGaP data using [SRA Tools](http://ncbi.github.io/sra-tools/), ensuring encryption of data transferred from dbGaP to the cluster. AWS enables [Secure Sockets Layer (SSL)](https://www.digicert.com/ssl.htm) by default for transfers between cloud storage and the cluster as well as between cloud storage service and compliant local storage to which an investigator saves results.
 
@@ -48,7 +48,7 @@ These steps should be performed if the site administrator is new to AWS.
 2. Click **Create a free account**.
 3. Check the **I am a new user** box and and continue to follow the instructions to create your new account. You'll enter, for example, contact and payment information. Note that the **Basic** level of service is sufficient for our purposes.
 4. Make a note of your account number.
-    1. Log into the [AWS console] using the new account's email address and password.
+    1. Log into the [AWS console](https://aws.amazon.com/console/) using the new account's email address and password.
     2. Click on the arrow next to your user name in the gray banner at the top of the page.
     3. Select **My Account**, and the **Account Id** will be displayed at the top of the page.
 5. Secure the account
@@ -73,7 +73,7 @@ These steps should be performed if the site administrator is new to AWS.
 
 During this process, it is best for the account administrator to sit with the user to minimize passing credentials. 
 
-1. *Administrator:* create new IAM user.
+1. *Administrator:* create a new IAM user.
     1. From the new user's computer, log into the [AWS Console](https://aws.amazon.com/console/) and select **Identity and Access Management**.
     2. Click **Users** on the left pane, then **Create New Users** on the right pane.
     <div align="center"><img src="assets/createnew.png" alt="Create New Users" style="width: 450px; padding: 5px;"/></div>
@@ -84,7 +84,7 @@ During this process, it is best for the account administrator to sit with the us
 2. *User:* register credentials with the AWS CLI by entering
         
         aws configure --profile dbgap
-at a terminal prompt on the user's computer. Enter the AWS Access Key ID, AWS Secret Access Key, and a default region as prompted. We recommend using the `us-east-1` because its connection to dbGaP-protected data on SRA appears to be fastest. A default output format need not be specified. Now the new user can issue AWS API calls via the AWS CLI. *It is recommended that credentials file that was just downloaded is now deleted.*
+at a terminal prompt on the user's computer. Enter the AWS Access Key ID, AWS Secret Access Key, and a default region as prompted. We recommend using `us-east-1` because its connection to dbGaP-protected data on SRA appears to be fastest. A default output format need not be specified. Now the new user can issue AWS API calls via the AWS CLI. *It is recommended that credentials file that was just downloaded is now deleted.*
 
 3. *Administrator:* Set user's password.
     1. Return to the [AWS Console](https://aws.amazon.com/console/), again click **Identity and Access Management**, again click **Users** on the left sidebar, and select the new user. Under **User Actions**, click **Manage Password**.
@@ -99,7 +99,7 @@ at a terminal prompt on the user's computer. Enter the AWS Access Key ID, AWS Se
 ### Create a secure CloudFormation stack (administrator)
 <a id="cloudform"></a>
 
-[CloudFormation](https://aws.amazon.com/cloudformation/) facilitates creation and management of a group of related AWS resources. Rail-dbGaP provides CloudFormation template for creating a [Virtual Private Cloud](https://aws.amazon.com/vpc/) (VPC) with a [single public subnet](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Scenario1.html). An EMR job flow that analyzes dbGaP data should be launched into this subnet. The VPC is supplemented by several security features, including
+[CloudFormation](https://aws.amazon.com/cloudformation/) facilitates creation and management of a group of related AWS resources. Rail-dbGaP provides a CloudFormation template for creating a [Virtual Private Cloud](https://aws.amazon.com/vpc/) (VPC) with a [single public subnet](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Scenario1.html). An EMR job flow that analyzes dbGaP data should be launched into this subnet. The VPC is supplemented by several security features, including
 
 * a VPC endpoint for S3, which ensures that the connection between the Elastic MapReduce cluster and S3 is private.
 * security groups that block all inbound traffic to the cluster from the internet except from the Elastic MapReduce webservice.
@@ -125,7 +125,7 @@ The best defense is a good offense, and you are encouraged to monitor traffic to
 
 ### Delegate Elastic MapReduce and CloudFormation authorites to the new IAM user (administrator)
 
-The new IAM user still needs sufficient privileges to run Rail-RNA on Elastic MapReduce.
+The new IAM user still needs sufficient privileges to use Elastic MapReduce.
 
 1. Return to the [AWS Console](https://aws.amazon.com/console/), again click **Identity and Access Management**, but now click **Policies** on the left sidebar.
 2. Click **Create Policy**, then select **Create Your Own Policy**. (You may need to click **Get Started** first.)
@@ -153,9 +153,7 @@ The new IAM user still needs sufficient privileges to run Rail-RNA on Elastic Ma
 <div align="center"><img src="assets/permissionstab.png" alt="Permissions" style="width: 700px; padding: 5px"/></div>
 4. Click **Attach Policy**, and select the `AWSCloudFormationReadOnlyAccess`, `AmazonElasticMapReduceFullAccess`, and `UseExistingEMRRoles` policies. Then click Attach Policy.
 <div align="center"><img src="assets/afterpermissionstab.png" alt="Attach Policy" style="width: 700px; padding: 5px"/></div>
-Different policies including only some of the permissions from these may be included, but note that the user must be able to:
-        * launch Elastic MapReduce clusters into the VPC from the secure dbGaP CloudFormation stack created by the administrator above, and
-        * read and write to the secure S3 bucket created by the administrator on behalf of the user.
+Different policies including only some of the permissions from these may be included, but note that the user must be able to: (1) launch Elastic MapReduce clusters into the VPC from the secure dbGaP CloudFormation stack created by the administrator above, and (2) read and write to the secure S3 bucket created by the administrator on behalf of the user.
 
 ### Set up default EMR roles (administrator & user)
 
@@ -187,7 +185,7 @@ It is recommended that you delete the key from your computer with
 Copy the script to S3 as follows.
 
         aws s3 cp /path/to/copy_files_to_node.sh s3://rail-dbgap-secure/test/ --profile dbgap --sse
-This script will be a bootstrap action that a) securely transfers the key to each EC2 instance and b) copies the mapper script to each instance. The mapper script is discussed below.
+This script will be a bootstrap action that (1) securely transfers the key to each EC2 instance and (2) copies the mapper script to each instance. The mapper script is discussed below.
 3. Download [this list](https://raw.githubusercontent.com/nellore/rail-dbgap/master/manifest.txt) of three SRA run accession numbers from test dbGaP project [SRP041052](http://trace.ncbi.nlm.nih.gov/Traces/sra/?study=SRP041052). Copy it to S3 as follows
 
         aws s3 cp /path/to/manifest.txt s3://rail-dbgap-secure/test/ --profile dbgap --sse
@@ -233,7 +231,7 @@ This allows the `UniqValueCount`s output by the mappers to be interpreted proper
 10. Next to **Input S3 location**, enter
 
         s3://rail-dbgap-secure/test/manifest.txt
-A given line of this file, which you uploaded to S3 in an earlier step, is passed to a mapper.
+A given line of this file, which you uploaded to S3 in an earlier step, is passed to each mapper.
 11. Next to **Output S3 location**, enter
 
         s3://rail-dbgap-secure/test/out/
@@ -251,7 +249,7 @@ Now click **Next**. Under **Hardware Configuration**, click the **Network** drop
 <div align="center"><img src="assets/putlogshere.png" alt="Hardware configuration" style="width: 600px; padding: 5px"/></div>
 16. Next to **Bootstrap Actions**, select **Custom action** from the drop-down menu, and click **Configure and add**, Enter the **Name** "Encrypt local storage", and specify the **JAR location** `s3://rail-emr/encrypt_local_storage.sh`, which is exactly the script [here](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/encrypt_local_storage.sh). As described in the [Rail-dbGaP protocol specification](README.md#spec), this script uses [Linux Unified Key Setup (LUKS)](https://guardianproject.info/code/luks/) to create an encrypted partition with a randomly generated keyfile, where temporary files, the Hadoop distributed file system, and buffered output to the cloud storage service are all configured to reside on the encrypted partition via symbolic links.
 <div align="center"><img src="assets/encryptlocalstorage.png" alt="Encrypt local storage bootstrap" style="width: 600px; padding: 5px"/></div>
-17. In exactly the same way, configure bootstrap actions to obtain the first four bootstrap actions depicted below. (Note that these four bootstrap actions should be in the order shown there.)
+17. In exactly the same way, configure bootstrap actions to obtain the four bootstrap actions depicted below. (Note that these four bootstrap actions should be in exactly this order.)
 <div align="center"><img src="assets/bootstrapactions.png" alt="All bootstrap actions" style="width: 600px; padding: 5px"/></div>
 `install_bioawk.sh` just installs bioawk, and `copy_files_to_node.sh` is the script you created in a previous step that securely copies the dbGaP key and step script on S3 to each node of the EMR cluster. [`set_up_sra_tools.sh`](https://github.com/nellore/rail-dbgap/blob/master/bootstraps/set_up_sra_tools.sh) downloads and installs SRA Tools, which includes `fastq-dump`. The script also configures a workspace on the encrypted partition using the dbGaP key so that `fastq-dump` can download samples from the dbGaP project protected by the key.
 18. Click **Next**. Under **Security Options**, make sure **Proceed without an EC2 key pair** is selected in the drop-down menu. This prevents SSHing to the cluster.
