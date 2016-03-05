@@ -104,7 +104,7 @@ at a terminal prompt on the user's computer. Enter the AWS Access Key ID, AWS Se
 
 * a VPC endpoint for S3, which ensures that the connection between the Elastic MapReduce cluster and S3 is private.
 * security groups that block all inbound traffic to the cluster from the internet except from the Elastic MapReduce webservice.
-* the creation of a secure bucket on S3 into which Rail-RNA should write all its output when operating on dbGaP-protected data. The bucket has an attached policy barring uploads that do not have server-side encryption (AES256) turned on.
+* the creation of a secure bucket on S3 into which all output should be written when operating on dbGaP-protected data. The bucket has an attached policy barring uploads that do not have server-side encryption (AES256) turned on.
 * [CloudTrail](https://aws.amazon.com/cloudtrail/) logs recording AWS API calls. These are written to the secure bucket.
 
 The administrator should grab the latest version of the template [here](https://raw.githubusercontent.com/nellore/rail/master/src/cloudformation/dbgap.template). Implement it by following these steps. (If the administrator already has CloudTrail turned on, they may not work, causing a rollback. An administrator satisfied with their CloudTrail configuration may instead want to use [this alternative CloudFormation template](https://raw.githubusercontent.com/nellore/rail/master/src/cloudformation/dbgap_minus_cloudtrail.template), which creates the VPC but does not attempt to set up CloudTrail.)
@@ -117,7 +117,7 @@ The administrator should grab the latest version of the template [here](https://
 <div align="center"><img src="assets/choosetemplate.png" alt="Choose template" style="width: 600px; padding: 5px"/></div>
 4. On the next screen:
     * Next to **Stack name**, write "dbgap".
-    * Next to **Parameters**, let the user type the name of a secure bucket into which they will write all of Rail-RNA's output. The bucket name should not have been taken by any other S3 user.
+    * Next to **Parameters**, let the user type the name of a secure bucket into which they will write all output. The bucket name should not have been taken by any other S3 user.
 <div align="center"><img src="assets/makeupbucket.png" alt="Pick bucket name" style="width: 600px; padding: 5px"/></div>
 5. Click **Next** and **Next** again, then click **Create** and wait for the stack creation to complete. The status message "CREATE_COMPLETE" will soon appear next to "dbgap" on the list of stacks.
 <div align="center"><img src="assets/createcomplete.png" alt="CREATE_COMPLETE" style="width: 600px; padding: 5px"/></div>
